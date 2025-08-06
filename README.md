@@ -1277,3 +1277,712 @@ O sistema de Split Payment está **completamente implementado** e pronto para us
 **🚀 Próximo passo:** Configurar as variáveis no `.env` e começar a usar as APIs de split em sua plataforma!
 
 **💡 Dica:** Comece com um produto de teste, adicione alguns parceiros e processe uma venda para ver o split funcionando na prática.
+
+# 🔗 Split Payment - Referência de APIs
+
+## 📋 Índice de APIs
+
+### 🤝 **Gestão de Parceiros**
+- `POST /api/partners` - Adicionar parceiro
+- `GET /api/partners/product/:id` - Listar parceiros do produto
+- `GET /api/partners/my-products` - Meus produtos como parceiro
+- `PUT /api/partners/:id` - Atualizar parceiro
+- `DELETE /api/partners/:id` - Remover parceiro
+- `GET /api/partners/:id/stats` - Estatísticas do parceiro
+
+### 💳 **Pagamentos com Split**
+- `POST /api/card-payment/create` - Processar pagamento com split
+- `GET /api/card-payment/status/:id` - Status do pagamento
+- `POST /api/card-payment/webhook` - Webhook de confirmação
+
+### 💰 **Comissões**
+- `GET /api/partners/commissions` - Listar comissões (usuário)
+- `GET /api/partners/my-commissions` - Minhas comissões
+- `PUT /api/partners/commissions/:id/approve` - Aprovar comissão (admin)
+- `POST /api/partners/commissions/:id/pay` - Marcar como paga (admin)
+
+### 🏦 **Carteiras**
+- `GET /api/wallet/balance` - Saldo da carteira
+- `GET /api/wallet/transactions` - Histórico de transações
+- `POST /api/wallet/withdraw` - Solicitar saque
+
+### 📊 **Relatórios (Admin)**
+- `GET /api/admin/split-overview` - Dashboard geral
+- `GET /api/reports/commissions` - Relatório de comissões
+- `GET /api/admin/partners/stats` - Estatísticas de parceiros
+
+---
+
+## 🔧 Referência Detalhada das APIs
+
+### 1. 🤝 **PARCEIROS**
+
+#### `POST /api/partners` - Adicionar Parceiro
+Adiciona um co-produtor ou afiliado a um produto.
+
+**Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer {token}
+```
+
+**Request Body:**
+```json
+{
+  "productId": "produto-uuid",
+  "partnerId": "usuario-uuid",
+  "partnerType": "affiliate", // ou "co_producer"
+  "commissionPercentage": 25,
+  "settings": {
+    "autoApprove": true,
+    "minPayout": 50.00
+  }
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "partner": {
+    "id": "partner-uuid",
+    "partnerCode": "ABC12345",
+    "status": "active",
+    "createdAt": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+**Errors:**
+- `400` - Dados inválidos
+- `404` - Produto ou usuário não encontrado
+- `409` - Parceria já existe
+
+---
+
+#### `GET /api/partners/product/:productId` - Listar Parceiros
+Lista todos os parceiros de um produto específico.
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Parameters:**
+- `productId` (string) - ID do produto
+
+**Query Parameters:**
+- `status` (string, opcional) - Filtrar por status: `active`, `inactive`, `pending`
+- `type` (string, opcional) - Filtrar por tipo: `co_producer`, `affiliate`
+
+**Response 200:**
+```json
+{
+  "partners": [
+    {
+      "id": "partner-uuid",
+      "partnerCode": "ABC12345",
+      "partnerType": "affiliate",
+      "commissionPercentage": 25,
+      "status": "active",
+      "totalEarned": 1500.00,
+      "conversions": 12,
+      "partner": {
+        "id": "user-uuid",
+        "name": "João Silva",
+        "email": "joao@email.com"
+      },
+      "createdAt": "2024-01-10T08:00:00Z"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "active": 4,
+    "inactive": 1
+  }
+}
+```
+
+---
+
+#### `PUT /api/partners/:id` - Atualizar Parceiro
+Atualiza configurações de um parceiro.
+
+**Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer {token}
+```
+
+**Request Body:**
+```json
+{
+  "commissionPercentage": 30,
+  "status": "active",
+  "settings": {
+    "autoApprove": false,
+    "minPayout": 100.00
+  }
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "partner": {
+    "id": "partner-uuid",
+    "commissionPercentage": 30,
+    "status": "active",
+    "updatedAt": "2024-01-15T11:00:00Z"
+  }
+}
+```
+
+---
+
+### 2. 💳 **PAGAMENTOS**
+
+#### `POST /api/card-payment/create` - Pagamento com Split
+Processa pagamento com cartão e distribui valores automaticamente.
+
+**Headers:**
+```
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "orderId": "pedido-uuid",
+  "partnerCode": "ABC12345", // Opcional - código do afiliado
+  "cardData": {
+    "cardNumber": "4111111111111111",
+    "expMonth": "12",
+    "expYear": "2025",
+    "cvc": "123",
+    "holderName": "João Silva"
+  },
+  "customerData": {
+    "name": "João Silva",
+    "email": "joao@email.com",
+    "document": "12345678901",
+    "phone": "11999999999"
+  }
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "payment": {
+    "chargeId": "charge-123",
+    "status": "pending",
+    "amount": 200.00,
+    "splitData": {
+      "totalAmount": 200.00,
+      "netAmount": 164.06,
+      "fees": {
+        "clientFee": 17.98,
+        "providerFee": 11.98,
+        "platformProfit": 5.98
+      },
+      "splitRules": [
+        {
+          "recipientId": "produtor-uuid",
+          "amount": 9844, // Em centavos
+          "percentage": 60,
+          "type": "seller"
+        },
+        {
+          "recipientId": "afiliado-uuid", 
+          "amount": 3281, // Em centavos
+          "percentage": 20,
+          "type": "affiliate"
+        }
+      ],
+      "partnerCommission": {
+        "partnerId": "afiliado-uuid",
+        "partnerCode": "ABC12345",
+        "commissionPercentage": 20,
+        "commissionAmount": 32.81
+      }
+    }
+  }
+}
+```
+
+**Errors:**
+- `400` - Dados inválidos
+- `402` - Pagamento recusado
+- `404` - Pedido não encontrado
+
+---
+
+#### `POST /api/card-payment/webhook` - Webhook
+Recebe confirmações de pagamento do gateway.
+
+**Headers:**
+```
+Content-Type: application/json
+X-Webhook-Signature: sha256=abc123...
+```
+
+**Request Body:**
+```json
+{
+  "event": "charge.paid",
+  "data": {
+    "id": "charge-123",
+    "status": "paid",
+    "amount": 20000, // Em centavos
+    "metadata": {
+      "order_id": "pedido-uuid",
+      "partner_code": "ABC12345"
+    }
+  }
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "processed": true
+}
+```
+
+---
+
+### 3. 💰 **COMISSÕES**
+
+#### `GET /api/partners/my-commissions` - Minhas Comissões
+Lista as comissões do usuário autenticado.
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `status` (string, opcional) - `pending`, `approved`, `paid`, `cancelled`
+- `startDate` (string, opcional) - Data início (YYYY-MM-DD)
+- `endDate` (string, opcional) - Data fim (YYYY-MM-DD)
+- `limit` (number, opcional) - Limite de resultados (padrão: 50)
+- `offset` (number, opcional) - Paginação
+
+**Response 200:**
+```json
+{
+  "commissions": [
+    {
+      "id": "commission-uuid",
+      "orderId": "order-uuid",
+      "productName": "Curso de Marketing",
+      "commissionAmount": 50.00,
+      "commissionPercentage": 25,
+      "orderAmount": 200.00,
+      "status": "approved",
+      "createdAt": "2024-01-10T14:30:00Z",
+      "paidAt": null,
+      "product": {
+        "id": "product-uuid",
+        "name": "Curso de Marketing Digital",
+        "seller": {
+          "name": "Carlos Silva"
+        }
+      }
+    }
+  ],
+  "summary": {
+    "totalCommissions": 2500.00,
+    "paidCommissions": 1800.00,
+    "pendingCommissions": 700.00,
+    "count": 25
+  },
+  "pagination": {
+    "total": 156,
+    "limit": 50,
+    "offset": 0,
+    "hasMore": true
+  }
+}
+```
+
+---
+
+#### `PUT /api/partners/commissions/:id/approve` - Aprovar Comissão
+Aprova uma comissão pendente (apenas admin).
+
+**Headers:**
+```
+Content-Type: application/json
+Authorization: Bearer {admin_token}
+```
+
+**Request Body:**
+```json
+{
+  "notes": "Aprovada automaticamente"
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "commission": {
+    "id": "commission-uuid",
+    "status": "approved",
+    "approvedAt": "2024-01-15T16:00:00Z"
+  }
+}
+```
+
+---
+
+### 4. 🏦 **CARTEIRAS**
+
+#### `GET /api/wallet/balance` - Saldo da Carteira
+Retorna o saldo atual da carteira do usuário.
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response 200:**
+```json
+{
+  "balance": {
+    "available": 1250.50,
+    "pending": 300.00,
+    "total": 1550.50
+  },
+  "lastTransaction": {
+    "id": "transaction-uuid",
+    "amount": 75.00,
+    "type": "credit",
+    "description": "Comissão - Curso de Vendas",
+    "createdAt": "2024-01-14T09:15:00Z"
+  }
+}
+```
+
+---
+
+#### `GET /api/wallet/transactions` - Histórico de Transações
+Lista as transações da carteira do usuário.
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `type` (string, opcional) - `credit`, `debit`
+- `startDate` (string, opcional) - Data início
+- `endDate` (string, opcional) - Data fim
+- `limit` (number, opcional) - Limite de resultados
+
+**Response 200:**
+```json
+{
+  "transactions": [
+    {
+      "id": "transaction-uuid",
+      "type": "credit",
+      "amount": 75.00,
+      "description": "Comissão - Curso de Vendas",
+      "referenceType": "order",
+      "referenceId": "order-uuid",
+      "status": "completed",
+      "metadata": {
+        "orderId": "order-uuid",
+        "productId": "product-uuid",
+        "splitType": "affiliate",
+        "percentage": 25
+      },
+      "createdAt": "2024-01-14T09:15:00Z"
+    }
+  ],
+  "summary": {
+    "totalCredits": 2100.00,
+    "totalDebits": 350.00,
+    "count": 48
+  }
+}
+```
+
+---
+
+### 5. 📊 **RELATÓRIOS**
+
+#### `GET /api/admin/split-overview` - Dashboard Administrativo
+Dashboard com visão geral do sistema de split (apenas admin).
+
+**Headers:**
+```
+Authorization: Bearer {admin_token}
+```
+
+**Query Parameters:**
+- `period` (string, opcional) - `day`, `week`, `month`, `quarter` (padrão: `month`)
+
+**Response 200:**
+```json
+{
+  "overview": {
+    "totalVolume": 125000.00,
+    "totalCommissions": 25000.00,
+    "totalTransactions": 456,
+    "averageTicket": 274.12,
+    "period": "month"
+  },
+  "commissionsByType": {
+    "seller": 75000.00,
+    "co_producer": 25000.00,
+    "affiliate": 25000.00
+  },
+  "topPartners": [
+    {
+      "id": "partner-uuid",
+      "name": "Maria Silva",
+      "type": "affiliate",
+      "totalEarned": 4500.00,
+      "conversions": 28,
+      "conversionRate": 8.5
+    }
+  ],
+  "recentTransactions": [
+    {
+      "id": "transaction-uuid",
+      "amount": 150.00,
+      "productName": "Masterclass Vendas",
+      "partnerName": "João Santos",
+      "createdAt": "2024-01-15T11:30:00Z"
+    }
+  ],
+  "charts": {
+    "dailyVolume": [
+      { "date": "2024-01-01", "volume": 2500.00 },
+      { "date": "2024-01-02", "volume": 3200.00 }
+    ],
+    "commissionsTrend": [
+      { "date": "2024-01-01", "commissions": 500.00 },
+      { "date": "2024-01-02", "commissions": 640.00 }
+    ]
+  }
+}
+```
+
+---
+
+#### `GET /api/reports/commissions` - Relatório de Comissões
+Relatório detalhado de comissões (admin).
+
+**Headers:**
+```
+Authorization: Bearer {admin_token}
+```
+
+**Query Parameters:**
+- `startDate` (string) - Data início (obrigatório)
+- `endDate` (string) - Data fim (obrigatório)
+- `partnerId` (string, opcional) - Filtrar por parceiro
+- `productId` (string, opcional) - Filtrar por produto
+- `status` (string, opcional) - Filtrar por status
+- `format` (string, opcional) - `json`, `csv` (padrão: `json`)
+
+**Response 200:**
+```json
+{
+  "summary": {
+    "totalCommissions": 12500.00,
+    "paidCommissions": 8000.00,
+    "pendingCommissions": 4500.00,
+    "transactionCount": 87,
+    "uniquePartners": 23,
+    "period": {
+      "startDate": "2024-01-01",
+      "endDate": "2024-01-31"
+    }
+  },
+  "commissions": [
+    {
+      "id": "commission-uuid",
+      "orderDate": "2024-01-15",
+      "productName": "Curso de Marketing",
+      "productId": "product-uuid",
+      "partnerName": "João Silva",
+      "partnerId": "partner-uuid",
+      "partnerType": "affiliate",
+      "orderAmount": 300.00,
+      "commissionAmount": 75.00,
+      "commissionPercentage": 25,
+      "status": "paid",
+      "paidAt": "2024-01-20T10:00:00Z",
+      "paymentReference": "PIX-123456"
+    }
+  ],
+  "groupedBy": {
+    "byPartner": [
+      {
+        "partnerId": "partner-uuid",
+        "partnerName": "João Silva",
+        "totalCommissions": 850.00,
+        "transactionCount": 8
+      }
+    ],
+    "byProduct": [
+      {
+        "productId": "product-uuid", 
+        "productName": "Curso de Marketing",
+        "totalCommissions": 1200.00,
+        "transactionCount": 12
+      }
+    ],
+    "byStatus": {
+      "pending": 4500.00,
+      "approved": 0.00,
+      "paid": 8000.00,
+      "cancelled": 0.00
+    }
+  }
+}
+```
+
+---
+
+## 🔒 Códigos de Erro
+
+### Códigos HTTP Padrão:
+- `200` - Sucesso
+- `201` - Criado com sucesso
+- `400` - Dados inválidos
+- `401` - Não autenticado
+- `403` - Não autorizado
+- `404` - Não encontrado
+- `409` - Conflito (já existe)
+- `422` - Erro de validação
+- `500` - Erro interno do servidor
+
+### Estrutura de Erro:
+```json
+{
+  "error": "Descrição do erro",
+  "type": "validation_error",
+  "details": {
+    "field": "commissionPercentage",
+    "message": "Deve estar entre 0 e 100"
+  },
+  "code": "INVALID_PERCENTAGE"
+}
+```
+
+### Tipos de Erro Específicos:
+- `validation_error` - Dados inválidos
+- `not_found` - Recurso não encontrado
+- `conflict_error` - Conflito de dados
+- `permission_error` - Sem permissão
+- `payment_error` - Erro no pagamento
+- `webhook_error` - Erro no webhook
+
+---
+
+## 🔧 Configuração de Autenticação
+
+### JWT Token:
+```javascript
+// Header Authorization
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+// Payload do token deve conter:
+{
+  "userId": "user-uuid",
+  "role": "admin|seller|partner",
+  "exp": 1705234800
+}
+```
+
+### Permissões por Role:
+- **admin** - Acesso total a todas as APIs
+- **seller** - Pode gerenciar parceiros dos seus produtos
+- **partner** - Pode ver apenas suas próprias comissões
+
+---
+
+## 🚀 Exemplos de Integração
+
+### 1. **SDK JavaScript**
+```javascript
+class SplitPaymentAPI {
+  constructor(baseUrl, token) {
+    this.baseUrl = baseUrl;
+    this.token = token;
+  }
+
+  async addPartner(productId, partnerData) {
+    const response = await fetch(`${this.baseUrl}/api/partners`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.token}`
+      },
+      body: JSON.stringify({ productId, ...partnerData })
+    });
+    
+    return response.json();
+  }
+
+  async processPayment(paymentData) {
+    const response = await fetch(`${this.baseUrl}/api/card-payment/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(paymentData)
+    });
+    
+    return response.json();
+  }
+}
+
+// Uso
+const splitAPI = new SplitPaymentAPI('https://api.seudominio.com', 'seu-token');
+const resultado = await splitAPI.addPartner('produto-uuid', {
+  partnerId: 'usuario-uuid',
+  partnerType: 'affiliate',
+  commissionPercentage: 25
+});
+```
+
+### 2. **Webhook Handler**
+```javascript
+app.post('/webhook/split-payment', (req, res) => {
+  const signature = req.headers['x-webhook-signature'];
+  const payload = JSON.stringify(req.body);
+  
+  // Validar assinatura
+  if (!validateSignature(payload, signature)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+
+  const { event, data } = req.body;
+  
+  switch(event) {
+    case 'commission.created':
+      handleNewCommission(data);
+      break;
+    case 'commission.paid':
+      handlePaidCommission(data);
+      break;
+  }
+
+  res.json({ success: true });
+});
+```
+
+---
+
+**📚 Esta referência de APIs cobre todas as funcionalidades do sistema de Split Payment. Use como guia para integrar o sistema na sua aplicação!**
+
